@@ -1,5 +1,4 @@
 import os
-import tempfile
 """
 Django settings for SecurityCompany project.
 
@@ -164,24 +163,20 @@ if DATABASE_URL:
 else:
     os.environ.pop("DATABASE_URL", None)
 
-VERCEL_SQLITE_FALLBACK = IS_VERCEL_RUNTIME and not DATABASE_URL and not VERCEL_CONFIGURATION_ERRORS
-SQLITE_DATABASE_PATH = (Path(tempfile.gettempdir()) / "db.sqlite3") if VERCEL_SQLITE_FALLBACK else BASE_DIR / "db.sqlite3"
+SQLITE_DATABASE_PATH = BASE_DIR / "db.sqlite3"
 
-if VERCEL_SQLITE_FALLBACK:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": str(SQLITE_DATABASE_PATH),
-        }
-    }
-else:
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=f"sqlite:///{SQLITE_DATABASE_PATH}",
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
-    }
+if IS_VERCEL_RUNTIME and not DATABASE_URL:
+    VERCEL_CONFIGURATION_ERRORS.append(
+        "DATABASE_URL must be set to a hosted PostgreSQL connection string. SQLite is not supported on Vercel."
+    )
+
+DATABASES = {
+    "default": dj_database_url.config(
+        default=f"sqlite:///{SQLITE_DATABASE_PATH}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+}
 
 if REQUIRE_PRODUCTION_CONFIG and not IS_VERCEL_RUNTIME and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     raise ImproperlyConfigured("DATABASE_URL must be set in production.")

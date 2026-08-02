@@ -1,6 +1,3 @@
-import shutil
-from pathlib import Path
-
 from django.conf import settings
 from django.db import OperationalError, ProgrammingError
 from django.http import HttpResponse
@@ -8,9 +5,7 @@ from django.http import HttpResponse
 from .models import AuditLog
 
 class VercelConfigurationMiddleware:
-    """Handles Vercel-specific startup configuration before views touch the DB."""
-
-    _sqlite_fallback_ready = False
+    """Shows deployment configuration errors before views touch the DB."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -20,28 +15,7 @@ class VercelConfigurationMiddleware:
         if errors:
             body = "Deployment configuration required:\n\n" + "\n".join(f"- {error}" for error in errors)
             return HttpResponse(body, status=503, content_type="text/plain; charset=utf-8")
-        fallback_error = self.prepare_vercel_sqlite_fallback()
-        if fallback_error:
-            return HttpResponse(fallback_error, status=503, content_type="text/plain; charset=utf-8")
         return self.get_response(request)
-
-    @classmethod
-    def prepare_vercel_sqlite_fallback(cls):
-        if not getattr(settings, "VERCEL_SQLITE_FALLBACK", False) or cls._sqlite_fallback_ready:
-            return ""
-        fallback_db = Path(settings.SQLITE_DATABASE_PATH)
-        source_db = Path(settings.BASE_DIR) / "db.sqlite3"
-        try:
-            fallback_db.parent.mkdir(parents=True, exist_ok=True)
-            if source_db.exists() and not fallback_db.exists():
-                shutil.copy2(source_db, fallback_db)
-            elif not fallback_db.exists():
-                return "Temporary Vercel SQLite setup failed: bundled db.sqlite3 was not found."
-            cls._sqlite_fallback_ready = True
-        except Exception as exc:
-            return f"Temporary Vercel SQLite setup failed: {exc}"
-        return ""
-
 
 class RequestAuditMiddleware:
     """Records authenticated staff write activity for compliance traceability."""
