@@ -1,7 +1,21 @@
 from django.conf import settings
 from django.db import OperationalError, ProgrammingError
+from django.http import HttpResponse
 
 from .models import AuditLog
+
+class VercelConfigurationMiddleware:
+    """Shows clear setup errors instead of a generic Vercel function crash."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        errors = getattr(settings, "VERCEL_CONFIGURATION_ERRORS", [])
+        if errors:
+            body = "Deployment configuration required:\n\n" + "\n".join(f"- {error}" for error in errors)
+            return HttpResponse(body, status=503, content_type="text/plain; charset=utf-8")
+        return self.get_response(request)
 
 
 class RequestAuditMiddleware:
@@ -64,3 +78,4 @@ class RequestAuditMiddleware:
         if forwarded_for:
             return forwarded_for.split(",")[0].strip() or None
         return request.META.get("REMOTE_ADDR") or None
+

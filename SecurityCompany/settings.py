@@ -38,15 +38,22 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-local-developm
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", not IS_VERCEL)
 REQUIRE_PRODUCTION_CONFIG = not DEBUG and (not IS_VERCEL or IS_VERCEL_RUNTIME)
+VERCEL_CONFIGURATION_ERRORS = []
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 if os.environ.get("VERCEL") and ".vercel.app" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(".vercel.app")
 if REQUIRE_PRODUCTION_CONFIG:
     if SECRET_KEY == "django-insecure-local-development-only-change-me":
-        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
+        if IS_VERCEL_RUNTIME:
+            VERCEL_CONFIGURATION_ERRORS.append("DJANGO_SECRET_KEY must be set to a real production secret.")
+        else:
+            raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
     if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
-        raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must list explicit production hosts.")
+        if IS_VERCEL_RUNTIME:
+            VERCEL_CONFIGURATION_ERRORS.append("DJANGO_ALLOWED_HOSTS must list explicit production hosts.")
+        else:
+            raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must list explicit production hosts.")
 
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
 SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "31536000" if not DEBUG else "0"))
@@ -79,6 +86,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'webCom.middleware.VercelConfigurationMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -126,8 +134,8 @@ DATABASES = {
 }
 
 if IS_VERCEL_RUNTIME and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
-    raise ImproperlyConfigured("DATABASE_URL must be set on Vercel. Use a hosted PostgreSQL database; SQLite is not supported for this deployment.")
-if REQUIRE_PRODUCTION_CONFIG and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    VERCEL_CONFIGURATION_ERRORS.append("DATABASE_URL must be set to a hosted PostgreSQL connection string. SQLite is not supported on Vercel.")
+if REQUIRE_PRODUCTION_CONFIG and not IS_VERCEL_RUNTIME and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     raise ImproperlyConfigured("DATABASE_URL must be set in production.")
 
 
@@ -203,8 +211,4 @@ EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 LOGIN_URL = '/staff/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
-
-
-
-
 
