@@ -1,0 +1,176 @@
+{% extends "webCom/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>{{ title }}</h1>
+    </div>
+    <div class="actions">
+        {% if model_name == "deployments" or model_name == "sites" %}<a class="btn" href="{% url 'webcom:duty_roster_upload' %}">Upload Duty Roster</a>{% endif %}
+        {% if model_name == "deployments" or model_name == "sites" %}<a class="btn primary" href="{% url 'webcom:duty_roster_export' %}">Export Duty Roster</a>{% endif %}
+        {% if model_name == "assets" %}<a class="btn" href="{% url 'webcom:asset_store_report' %}">Report</a>{% endif %}
+        {% if model_name == "asset-assignments" %}<a class="btn" href="{% url 'webcom:asset_assignment_report' %}">Report</a>{% endif %}
+        {% if model_name == "incidents" %}<a class="btn" href="{% url 'webcom:incident_report' %}">Report</a>{% endif %}
+        {% if model_name == "incidents" %}<a class="btn" href="{% url 'webcom:incident_notifications' %}">Notifications</a>{% endif %}
+        {% if model_name == "disciplinary-actions" %}<a class="btn" href="{% url 'webcom:disciplinary_notifications' %}">Notifications</a>{% endif %}
+        {% if model_name == "budgets" %}<a class="btn" href="{% url 'webcom:budget_report' %}">Budget Report</a>{% endif %}
+        {% if model_name == "expenses" %}<a class="btn" href="{% url 'webcom:expense_report' %}">Accountability Report</a>{% endif %}
+        {% if model_name == "paymees" %}<a class="btn primary" href="{% url 'webcom:aging_report' %}">Aging Report</a>{% endif %}
+        {% if not managed_table %}<a class="btn" href="{% url 'webcom:import' model_name %}">Import CSV</a>{% endif %}
+        <a class="btn" href="{% url 'webcom:export' model_name %}">Export Table CSV</a>
+        {% if not managed_table %}<a class="btn primary" href="{% url 'webcom:create' model_name %}">Add</a>{% endif %}
+        <a class="btn" href="{% url 'webcom:home' %}">Dashboard</a>
+    </div>
+</div>
+
+{% if rows %}
+    <div class="selection-bar" data-selection-bar hidden>
+        <span><strong data-selected-count>0</strong> selected</span>
+        <span class="selection-actions">
+            <button class="btn" type="button" data-copy-selected>Copy IDs</button>
+            <button class="btn" type="button" data-clear-selection>Clear</button>
+        </span>
+    </div>
+    <div class="table-scroll">
+    <table class="{% if model_name == 'incidents' %}compact-table{% endif %}">
+        <thead>
+            <tr>
+                <th class="record-select-col"><input type="checkbox" data-select-all aria-label="Select all records"></th>
+                {% for field_label in field_labels %}
+                    <th>{{ field_label }}</th>
+                {% endfor %}
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+                <tr data-record-row data-record-id="{{ row.pk }}">
+                    <td class="record-select-col"><input type="checkbox" data-record-select value="{{ row.pk }}" aria-label="Select record {{ row.pk }}"></td>
+                    {% for value in row.values %}
+                        <td>{{ value }}</td>
+                    {% endfor %}
+                    <td>
+                        <div class="actions">
+                            <a class="btn" href="{% url 'webcom:detail' model_name row.pk %}">View</a>
+                            {% if model_name == "salaries" %}<a class="btn primary" href="{% url 'webcom:salary_payslip' row.pk %}">Payslip</a>{% endif %}
+                            {% if model_name == "invoices" %}<a class="btn primary" href="{% url 'webcom:invoice_document' row.pk %}">Invoice</a>{% endif %}
+                            {% if model_name == "payments" %}<a class="btn primary" href="{% url 'webcom:payment_receipt' row.pk %}">Receipt</a>{% endif %}
+                            {% if model_name == "payments" %}<a class="btn" href="{% url 'webcom:payment_reconciliation' row.pk %}">Reconciliation</a>{% endif %}
+                            {% if model_name == "purchase-orders" %}<a class="btn primary" href="{% url 'webcom:purchase_order_lpo_report' row.pk %}">LPO</a>{% endif %}
+                            {% if model_name == "training" %}<a class="btn primary" href="{% url 'webcom:training_certificate' row.pk %}">Generate Certificate</a>{% endif %}
+                            {% if model_name == "employees" and row.object.can_transfer %}<a class="btn primary" href="{% url 'webcom:employee_transfer' row.pk %}">Transfer</a>{% endif %}
+                            {% if model_name == "leaves" %}<a class="btn primary" href="{% url 'webcom:leave_review' row.pk %}">Review</a>{% endif %}
+                            {% if model_name == "procurement-requisitions" and row.object.can_contact_supplier %}<form method="post" action="{% url 'webcom:procurement_contact_supplier' row.pk %}">{% csrf_token %}<button class="btn primary" type="submit">Contact Supplier</button></form>{% endif %}
+                            {% if not managed_table %}<a class="btn" href="{% url 'webcom:update' model_name row.pk %}">Edit</a>{% endif %}
+                            {% if model_name == "incidents" %}<a class="btn primary" href="{% url 'webcom:incident_notify' row.pk %}">Notify</a>{% endif %}
+                            {% if not managed_table %}<a class="btn danger" href="{% url 'webcom:delete' model_name row.pk %}">Delete</a>{% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+{% else %}
+    <div class="panel"></div>
+{% endif %}
+<script>
+    (function () {
+        const rows = Array.from(document.querySelectorAll("[data-record-row]"));
+        if (!rows.length) return;
+        const selectAll = document.querySelector("[data-select-all]");
+        const selectionBar = document.querySelector("[data-selection-bar]");
+        const selectedCount = document.querySelector("[data-selected-count]");
+        const clearButton = document.querySelector("[data-clear-selection]");
+        const copyButton = document.querySelector("[data-copy-selected]");
+
+        function selectedInputs() {
+            return rows.map(row => row.querySelector("[data-record-select]")).filter(input => input && input.checked);
+        }
+
+        function syncSelection() {
+            const selected = selectedInputs();
+            rows.forEach(function (row) {
+                const input = row.querySelector("[data-record-select]");
+                row.classList.toggle("record-selected", Boolean(input && input.checked));
+            });
+            if (selectedCount) selectedCount.textContent = String(selected.length);
+            if (selectionBar) selectionBar.hidden = selected.length === 0;
+            if (selectAll) {
+                selectAll.checked = selected.length === rows.length;
+                selectAll.indeterminate = selected.length > 0 && selected.length < rows.length;
+            }
+        }
+
+        rows.forEach(function (row) {
+            const input = row.querySelector("[data-record-select]");
+            if (!input) return;
+            input.addEventListener("change", syncSelection);
+            row.addEventListener("click", function (event) {
+                if (event.target.closest("a, button, input, select, textarea, form")) return;
+                input.checked = !input.checked;
+                syncSelection();
+            });
+        });
+
+        if (selectAll) {
+            selectAll.addEventListener("change", function () {
+                rows.forEach(function (row) {
+                    const input = row.querySelector("[data-record-select]");
+                    if (input) input.checked = selectAll.checked;
+                });
+                syncSelection();
+            });
+        }
+        if (clearButton) {
+            clearButton.addEventListener("click", function () {
+                rows.forEach(function (row) {
+                    const input = row.querySelector("[data-record-select]");
+                    if (input) input.checked = false;
+                });
+                syncSelection();
+            });
+        }
+        if (copyButton) {
+            copyButton.addEventListener("click", async function () {
+                const ids = selectedInputs().map(input => input.value).join(", ");
+                if (!ids) return;
+                try {
+                    await navigator.clipboard.writeText(ids);
+                    copyButton.textContent = "Copied";
+                    window.setTimeout(function () { copyButton.textContent = "Copy IDs"; }, 1200);
+                } catch (error) {
+                    window.prompt("Selected record IDs", ids);
+                }
+            });
+        }
+        syncSelection();
+    })();
+</script>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

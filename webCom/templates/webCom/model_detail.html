@@ -1,0 +1,57 @@
+{% extends "webCom/base.html" %}
+
+{% block title %}{{ object }}{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>{{ object }}</h1>
+    </div>
+    <div class="actions">
+        <a class="btn" href="{% url 'webcom:list' model_name %}">Back</a>
+        {% if model_name == "contracts" %}
+            <a class="btn primary" href="{% url 'webcom:contract_report' pk %}">Report</a>
+        {% endif %}
+        {% if model_name == "salaries" %}
+            <a class="btn primary" href="{% url 'webcom:salary_payslip' pk %}">Payslip</a>
+        {% endif %}
+        {% if model_name == "training" %}
+            <a class="btn primary" href="{% url 'webcom:training_certificate' pk %}">Generate Certificate</a>
+        {% endif %}
+        {% if model_name == "employees" and object.can_transfer %}
+            <a class="btn primary" href="{% url 'webcom:employee_transfer' pk %}">Transfer</a>
+        {% endif %}
+        {% if model_name == "leaves" %}
+            <a class="btn primary" href="{% url 'webcom:leave_review' pk %}">Review</a>
+        {% endif %}
+        {% if model_name == "purchase-orders" %}
+            <a class="btn primary" href="{% url 'webcom:purchase_order_lpo_report' pk %}">LPO Report</a>
+        {% endif %}
+        {% if model_name == "payments" %}
+            <a class="btn primary" href="{% url 'webcom:payment_receipt' pk %}">Receipt</a>
+            <a class="btn" href="{% url 'webcom:payment_reconciliation' pk %}">Reconciliation</a>
+        {% endif %}
+        {% if model_name == "procurement-requisitions" and object.can_contact_supplier %}
+            <form method="post" action="{% url 'webcom:procurement_contact_supplier' pk %}">{% csrf_token %}<button class="btn primary" type="submit">Contact Supplier</button></form>
+        {% endif %}
+        {% if not managed_table %}
+            <a class="btn" href="{% url 'webcom:update' model_name pk %}">Edit</a>
+            <a class="btn danger" href="{% url 'webcom:delete' model_name pk %}">Delete</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel">
+    <dl class="detail-list">
+        {% for label, value in details %}
+            <dt>{{ label }}</dt>
+            <dd>{{ value }}</dd>
+        {% endfor %}
+    </dl>
+</div>
+{% endblock %}
+
+
+
+
+

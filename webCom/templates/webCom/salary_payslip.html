@@ -1,0 +1,103 @@
+{% extends "webCom/base.html" %}
+{% load format_values %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<style>
+    .payslip-page { background: #fff; border: 1px solid var(--line); padding: 22px; }
+    .payslip-heading { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .payslip-heading h1 { margin: 0 0 6px; }
+    .payslip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .payslip-table { width: 100%; border-collapse: collapse; }
+    .payslip-table th, .payslip-table td { border: 1px solid #cfd6df; padding: 8px; text-align: left; }
+    .payslip-table th { background: #f3f6f9; }
+    .amount { text-align: right; white-space: nowrap; }
+    .summary-row th, .summary-row td { font-weight: 700; }
+    .payslip-notes { margin-top: 18px; color: var(--muted); }
+    @media print {
+        .sidebar, .top-strip, .report-actions { display: none; }
+        .app-shell { display: block; }
+        main { width: 100%; margin: 0; }
+        .payslip-page { border: 0; padding: 0; }
+    }
+</style>
+
+<div class="report-actions">
+    <a class="btn" href="{% url 'webcom:list' 'salaries' %}">Back</a>
+    <button class="btn primary" type="button" onclick="window.print()">Print</button>
+</div>
+
+<section class="payslip-page">
+    <div class="payslip-heading">
+        <div>
+            <h1>Payslip</h1>
+            <div>{{ salary.period_start_date }} to {{ salary.period_end_date }}</div>
+        </div>
+        <div>
+            <strong>{{ employee }}</strong><br>
+            Employee ID: {{ employee.employee_id }}<br>
+            Employee No: {{ employee.employee_number }}<br>
+            Role: {{ employee.get_role_display }}<br>
+            Position: {{ employee.get_position_display }}<br>
+            NSSF No: {% if employee.nssf_number %}{{ employee.nssf_number }}{% else %}-{% endif %}
+        </div>
+    </div>
+
+    <table class="payslip-table">
+        <tbody>
+            <tr><th>Shifts Worked</th><td>{{ salary.shifts_worked|thousands }}</td><th>Daily Rate</th><td class="amount">{{ salary.daily_rate|thousands }}</td></tr>
+            <tr><th>Standard Shifts</th><td>{{ salary.standard_shifts|thousands }}</td><th>Overtime Shifts</th><td class="amount">{{ salary.overtime_shifts|thousands }}</td></tr>
+            <tr><th>Pay Period</th><td>{{ salary.get_pay_period_display }}</td><th>Gross Pay</th><td class="amount">{{ salary.gross_pay|thousands }}</td></tr>
+        </tbody>
+    </table>
+
+    <div class="payslip-grid report-section">
+        <div>
+            <h3>Earnings</h3>
+            <table class="payslip-table">
+                <tbody>
+                    {% for label, amount in earnings %}
+                        <tr><th>{{ label }}</th><td class="amount">{{ amount|thousands }}</td></tr>
+                    {% endfor %}
+                    <tr class="summary-row"><th>Gross Pay</th><td class="amount">{{ salary.gross_pay|thousands }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <h3>Deductions</h3>
+            <table class="payslip-table">
+                <tbody>
+                    {% for label, amount in deductions %}
+                        <tr><th>{{ label }}</th><td class="amount">{{ amount|thousands }}</td></tr>
+                    {% endfor %}
+                    <tr class="summary-row"><th>Total Deductions</th><td class="amount">{{ salary.total_deductions|thousands }}</td></tr>
+                    <tr><th>Advance Balance</th><td class="amount">{{ advance_balance|thousands }}</td></tr>
+                    <tr class="summary-row"><th>Net Pay</th><td class="amount">{{ salary.net_pay|thousands }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="report-section">
+        <h3>Employer Contributions</h3>
+        <table class="payslip-table">
+            <tbody>
+                {% for label, amount in employer_contributions %}
+                    <tr><th>{{ label }}</th><td class="amount">{{ amount|thousands }}</td></tr>
+                {% endfor %}
+                <tr class="summary-row"><th>Total NSSF Contribution</th><td class="amount">{{ salary.total_nssf|thousands }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="payslip-notes">
+        {% for note in payroll_notes %}<div>{{ note }}</div>{% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+
+
+
+
