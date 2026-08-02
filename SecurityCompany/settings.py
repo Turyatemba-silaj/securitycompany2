@@ -18,8 +18,8 @@ from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-IS_VERCEL = bool(os.environ.get("VERCEL"))
-IS_VERCEL_RUNTIME = IS_VERCEL and bool(os.environ.get("VERCEL_REGION"))
+IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("VERCEL_URL") or os.environ.get("VERCEL_REGION"))
+IS_VERCEL_RUNTIME = IS_VERCEL
 
 
 def env_bool(name, default=False):
@@ -33,7 +33,7 @@ def env_bool(name, default=False):
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-local-development-only-change-me")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or os.environ.get("SECRET_KEY") or "django-insecure-local-development-only-change-me"
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", not IS_VERCEL)
