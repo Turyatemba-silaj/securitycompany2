@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
@@ -121,9 +122,46 @@ WSGI_APPLICATION = 'SecurityCompany.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or os.environ.get("POSTGRES_URL_NON_POOLING")
+DATABASE_URL_PLACEHOLDERS = {
+    "<your postgresql connection string>",
+    "paste-real-postgres-url-here",
+    "postgresql://username:password@hostname/database_name?sslmode=require",
+}
+VALID_DATABASE_SCHEMES = {"postgres", "postgresql", "pgsql", "postgis", "timescale", "timescalegis", "sqlite"}
+
+
+def configured_database_url():
+    database_url = (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+        or os.environ.get("POSTGRES_URL_NON_POOLING")
+        or ""
+    ).strip()
+    if not database_url:
+        return ""
+
+    lowered_url = database_url.lower()
+    is_placeholder = (
+        lowered_url in DATABASE_URL_PLACEHOLDERS
+        or "paste-real" in lowered_url
+        or "username:password@hostname" in lowered_url
+        or "<your" in lowered_url
+    )
+    scheme = urlparse(database_url).scheme
+    if is_placeholder or scheme not in VALID_DATABASE_SCHEMES:
+        message = "DATABASE_URL must be a real database URL, for example postgresql://user:password@host/database?sslmode=require. Do not use the placeholder text."
+        if IS_VERCEL_RUNTIME:
+            VERCEL_CONFIGURATION_ERRORS.append(message)
+            return ""
+        raise ImproperlyConfigured(message)
+    return database_url
+
+
+DATABASE_URL = configured_database_url()
 if DATABASE_URL:
-    os.environ.setdefault("DATABASE_URL", DATABASE_URL)
+    os.environ["DATABASE_URL"] = DATABASE_URL
+else:
+    os.environ.pop("DATABASE_URL", None)
 
 DATABASES = {
     "default": dj_database_url.config(
