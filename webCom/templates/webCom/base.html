@@ -1290,6 +1290,11 @@
                     <a class="nav-link {% if not active_model %}active{% endif %}" href="{% url 'webcom:home' %}">
                         <span>Dashboard</span>
                     </a>
+                    {% if request.user.is_superuser %}
+                        <a class="nav-link {% if active_model == 'password-management' %}active{% endif %}" href="{% url 'webcom:password_management' %}">
+                            <span>Password Management</span>
+                        </a>
+                    {% endif %}
                 </div>
                 {% for department in sidebar_departments %}
                     <details class="nav-group" {% if department.active %}open{% endif %}>
@@ -1390,32 +1395,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

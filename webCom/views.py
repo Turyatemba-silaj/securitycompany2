@@ -8,9 +8,10 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.forms import modelformset_factory
 from django.db.models import Q, Sum
@@ -55,6 +56,7 @@ from .forms import (
     PatrolLogForm,
     PaymeeForm,
     PayrollDeductionForm,
+    PasswordResetManagementForm,
     PaymentForm,
     SupplierForm,
     ProcurementRequisitionForm,
@@ -457,6 +459,127 @@ def build_department_cards(user=None):
     return departments
 
 
+
+
+
+def _employee_account_maps():
+    employees = Employee.objects.only("employee_id", "employee_number", "first_name", "last_name", "email", "status")
+    by_email = {}
+    by_employee_number = {}
+    for employee in employees:
+        if employee.email:
+            by_email[employee.email.strip().lower()] = employee
+        if employee.employee_number:
+            by_employee_number[employee.employee_number.strip().lower()] = employee
+    return by_email, by_employee_number
+
+
+def _matched_employee_for_user(user, by_email, by_employee_number):
+    email_key = (user.email or "").strip().lower()
+    username_key = (user.username or "").strip().lower()
+    if email_key and email_key in by_email:
+        return by_email[email_key]
+    if username_key and username_key in by_employee_number:
+        return by_employee_number[username_key]
+    return None
+
+
+def _password_management_rows():
+    User = get_user_model()
+    by_email, by_employee_number = _employee_account_maps()
+    rows = []
+    users = User.objects.prefetch_related("groups").order_by("username")
+    for user in users:
+        employee = _matched_employee_for_user(user, by_email, by_employee_number)
+        groups = ", ".join(group.name for group in user.groups.all()) or "No group"
+        rows.append(
+            {
+                "user": user,
+                "groups": groups,
+                "employee": employee,
+                "employee_status": employee.get_status_display() if employee else "No linked employee",
+                "is_terminated_staff": bool(employee and employee.status == "terminated"),
+            }
+        )
+    return rows
+
+
+def _deactivate_terminated_staff_accounts():
+    User = get_user_model()
+    by_email, by_employee_number = _employee_account_maps()
+    users = User.objects.filter(is_active=True)
+    changed = []
+    for user in users:
+        employee = _matched_employee_for_user(user, by_email, by_employee_number)
+        if employee and employee.status == "terminated":
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+            changed.append(user.username)
+    return changed
+
+
+def password_management(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only system administrators can manage staff account access.")
+
+    if request.method == "POST" and request.POST.get("action") == "deactivate_terminated":
+        changed = _deactivate_terminated_staff_accounts()
+        if changed:
+            messages.success(request, f"Deactivated {len(changed)} terminated staff account(s): {', '.join(changed[:8])}.")
+        else:
+            messages.info(request, "No active Django user accounts matched terminated staff records.")
+        return redirect("webcom:password_management")
+
+    rows = _password_management_rows()
+    context = {
+        "rows": rows,
+        "total_users": len(rows),
+        "active_users": sum(1 for row in rows if row["user"].is_active),
+        "blocked_users": sum(1 for row in rows if not row["user"].is_active),
+        "terminated_staff_accounts": sum(1 for row in rows if row["is_terminated_staff"]),
+    }
+    return render_page(request, "webCom/password_management.html", context, "password-management")
+
+
+def password_management_action(request, user_id):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only system administrators can manage staff account access.")
+    if request.method != "POST":
+        return redirect("webcom:password_management")
+
+    User = get_user_model()
+    managed_user = get_object_or_404(User, pk=user_id)
+    action = request.POST.get("action")
+    by_email, by_employee_number = _employee_account_maps()
+    employee = _matched_employee_for_user(managed_user, by_email, by_employee_number)
+
+    if action == "activate":
+        if employee and employee.status == "terminated":
+            messages.error(request, f"{managed_user.username} is linked to a terminated employee record. Reactivate the employee first if this account should be restored.")
+        else:
+            managed_user.is_active = True
+            managed_user.save(update_fields=["is_active"])
+            messages.success(request, f"Activated {managed_user.username}.")
+    elif action == "block":
+        if managed_user.pk == request.user.pk:
+            messages.error(request, "You cannot block your own active administrator account.")
+        else:
+            managed_user.is_active = False
+            managed_user.save(update_fields=["is_active"])
+            messages.success(request, f"Blocked {managed_user.username}.")
+    elif action == "reset_password":
+        form = PasswordResetManagementForm(request.POST, user=managed_user)
+        if form.is_valid():
+            managed_user.set_password(form.cleaned_data["new_password"])
+            managed_user.save(update_fields=["password"])
+            messages.success(request, f"Password reset for {managed_user.username}.")
+        else:
+            errors = "; ".join(error for field_errors in form.errors.values() for error in field_errors)
+            messages.error(request, f"Password reset failed for {managed_user.username}: {errors}")
+    else:
+        messages.error(request, "Unknown account management action.")
+
+    return redirect("webcom:password_management")
 
 def public_site_context():
     today = timezone.localdate()
@@ -3382,103 +3505,3 @@ def incident_report(request):
         "severity_counts": [(dict(Incident.SEVERITY_LEVEL_CHOICES).get(key, key), count) for key, count in severity_counts.items()],
     }
     return render_page(request, "webCom/incident_report.html", context, "incidents")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

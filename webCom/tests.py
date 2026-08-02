@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.forms import modelformset_factory
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from .forms import DisciplinaryActionForm, ExpenseForm, InvoiceForm, PerformanceEvaluationForm, SiteForm
@@ -2308,3 +2309,81 @@ class SupplierProformaValidationTests(TestCase):
         self.assertContains(response, "exceeds the approved requisition amount")
         self.assertEqual(SupplierProformaInvoice.objects.count(), 0)
         self.assertEqual(PurchaseOrder.objects.count(), 0)
+
+
+class PasswordManagementTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="system-admin",
+            email="admin@example.com",
+            password="Admin-Password-2026!",
+        )
+        self.staff_user = User.objects.create_user(
+            username="staff-user",
+            email="staff@example.com",
+            password="Old-Password-2026!",
+            is_staff=True,
+            is_active=False,
+        )
+
+    def test_superuser_can_open_password_management(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("webcom:password_management"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Password Management")
+        self.assertContains(response, "staff-user")
+
+    def test_superuser_can_activate_and_reset_password(self):
+        self.client.force_login(self.admin)
+
+        activate_response = self.client.post(
+            reverse("webcom:password_management_action", args=[self.staff_user.pk]),
+            {"action": "activate"},
+        )
+        self.assertRedirects(activate_response, reverse("webcom:password_management"))
+        self.staff_user.refresh_from_db()
+        self.assertTrue(self.staff_user.is_active)
+
+        reset_response = self.client.post(
+            reverse("webcom:password_management_action", args=[self.staff_user.pk]),
+            {
+                "action": "reset_password",
+                "new_password": "New-Password-2026!",
+                "confirm_password": "New-Password-2026!",
+            },
+        )
+        self.assertRedirects(reset_response, reverse("webcom:password_management"))
+        self.staff_user.refresh_from_db()
+        self.assertTrue(self.staff_user.check_password("New-Password-2026!"))
+
+    def test_bulk_deactivates_users_linked_to_terminated_staff(self):
+        self.staff_user.is_active = True
+        self.staff_user.save(update_fields=["is_active"])
+        Employee.objects.create(
+            first_name="Terminated",
+            last_name="Staff",
+            date_of_birth=date(1990, 1, 1),
+            gender="M",
+            phone_number="0700000000",
+            email="staff@example.com",
+            address="Kampala",
+            national_id="NAT-TERM-001",
+            role="guard",
+            position="security_guard",
+            department="operations",
+            hire_date=date(2020, 1, 1),
+            status="terminated",
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("webcom:password_management"),
+            {"action": "deactivate_terminated"},
+        )
+
+        self.assertRedirects(response, reverse("webcom:password_management"))
+        self.staff_user.refresh_from_db()
+        self.assertFalse(self.staff_user.is_active)

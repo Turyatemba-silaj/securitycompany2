@@ -1,7 +1,7 @@
+import shutil
 from pathlib import Path
 
 from django.conf import settings
-from django.core.management import call_command
 from django.db import OperationalError, ProgrammingError
 from django.http import HttpResponse
 
@@ -29,13 +29,14 @@ class VercelConfigurationMiddleware:
     def prepare_vercel_sqlite_fallback(cls):
         if not getattr(settings, "VERCEL_SQLITE_FALLBACK", False) or cls._sqlite_fallback_ready:
             return ""
-        marker = Path(settings.SQLITE_DATABASE_PATH).with_name(".securitycompany_sqlite_ready")
-        if marker.exists():
-            cls._sqlite_fallback_ready = True
-            return ""
+        fallback_db = Path(settings.SQLITE_DATABASE_PATH)
+        source_db = Path(settings.BASE_DIR) / "db.sqlite3"
         try:
-            call_command("migrate", interactive=False, verbosity=0)
-            marker.write_text("ready", encoding="utf-8")
+            fallback_db.parent.mkdir(parents=True, exist_ok=True)
+            if source_db.exists() and not fallback_db.exists():
+                shutil.copy2(source_db, fallback_db)
+            elif not fallback_db.exists():
+                return "Temporary Vercel SQLite setup failed: bundled db.sqlite3 was not found."
             cls._sqlite_fallback_ready = True
         except Exception as exc:
             return f"Temporary Vercel SQLite setup failed: {exc}"
@@ -102,4 +103,5 @@ class RequestAuditMiddleware:
         if forwarded_for:
             return forwarded_for.split(",")[0].strip() or None
         return request.META.get("REMOTE_ADDR") or None
+
 

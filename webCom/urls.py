@@ -20,6 +20,8 @@ urlpatterns = [
     path("careers/", views.careers, name="careers"),
     path("careers/<int:pk>/", views.job_detail, name="job_detail"),
     path("dashboard/", staff_required(views.home), name="home"),
+    path("staff/password-management/", staff_required(views.password_management), name="password_management"),
+    path("staff/password-management/<int:user_id>/", staff_required(views.password_management_action), name="password_management_action"),
     path("deployments/upload-roster/", staff_required(views.duty_roster_upload), name="duty_roster_upload"),
     path("deployments/export-roster/", staff_required(views.duty_roster_export), name="duty_roster_export"),
     path("contracts/<int:pk>/report/", staff_required(views.contract_report), name="contract_report"),
@@ -56,5 +58,3 @@ urlpatterns = [
     path("<str:model_name>/<int:pk>/edit/", staff_required(views.model_update), name="update"),
     path("<str:model_name>/<int:pk>/delete/", staff_required(views.model_delete), name="delete"),
 ]
-
-
