@@ -113,24 +113,20 @@ WSGI_APPLICATION = 'SecurityCompany.wsgi.application'
 
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or os.environ.get("POSTGRES_URL_NON_POOLING")
 if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=int(os.environ.get("DATABASE_CONN_MAX_AGE", "600")),
-            ssl_require=env_bool("DATABASE_SSL_REQUIRE", not DEBUG),
-        )
-    }
-elif IS_VERCEL:
+    os.environ.setdefault("DATABASE_URL", DATABASE_URL)
+
+DATABASES = {
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+}
+
+if IS_VERCEL and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     raise ImproperlyConfigured("DATABASE_URL must be set on Vercel. Use a hosted PostgreSQL database; SQLite is not supported for this deployment.")
-elif not DEBUG:
+if not DEBUG and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     raise ImproperlyConfigured("DATABASE_URL must be set in production.")
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
 
 
 # Password validation
@@ -205,5 +201,6 @@ EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 LOGIN_URL = '/staff/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
+
 
 
