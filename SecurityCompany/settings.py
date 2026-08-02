@@ -130,16 +130,7 @@ DATABASE_URL_PLACEHOLDERS = {
 VALID_DATABASE_SCHEMES = {"postgres", "postgresql", "pgsql", "postgis", "timescale", "timescalegis", "sqlite"}
 
 
-def configured_database_url():
-    database_url = (
-        os.environ.get("DATABASE_URL")
-        or os.environ.get("POSTGRES_URL")
-        or os.environ.get("POSTGRES_URL_NON_POOLING")
-        or ""
-    ).strip()
-    if not database_url:
-        return ""
-
+def invalid_database_url_reason(name, database_url):
     lowered_url = database_url.lower()
     is_placeholder = (
         lowered_url in DATABASE_URL_PLACEHOLDERS
@@ -148,15 +139,38 @@ def configured_database_url():
         or "<your" in lowered_url
     )
     scheme = urlparse(database_url).scheme
-    if is_placeholder or scheme not in VALID_DATABASE_SCHEMES:
-        message = "DATABASE_URL must be a real database URL, for example postgresql://user:password@host/database?sslmode=require. Do not use the placeholder text."
+    if is_placeholder:
+        return f"{name} is still placeholder text. Replace it with a real hosted PostgreSQL connection string."
+    if scheme not in VALID_DATABASE_SCHEMES:
+        return f"{name} must be a real database URL, for example postgresql://user:password@host/database?sslmode=require."
+    return ""
+
+
+def configured_database_url():
+    invalid_reasons = []
+    for name in ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING"):
+        database_url = (os.environ.get(name) or "").strip()
+        if not database_url:
+            continue
+        invalid_reason = invalid_database_url_reason(name, database_url)
+        if invalid_reason:
+            invalid_reasons.append(invalid_reason)
+            continue
+        return database_url
+
+    if invalid_reasons:
+        message = " ".join(invalid_reasons)
         if IS_VERCEL_RUNTIME:
             VERCEL_CONFIGURATION_ERRORS.append(message)
             return ""
         raise ImproperlyConfigured(message)
-    return database_url
 
+    return ""
 
+DATABASE_ENV_WAS_PROVIDED = any(
+    (os.environ.get(name) or "").strip()
+    for name in ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING")
+)
 DATABASE_URL = configured_database_url()
 if DATABASE_URL:
     os.environ["DATABASE_URL"] = DATABASE_URL
@@ -165,7 +179,7 @@ else:
 
 SQLITE_DATABASE_PATH = BASE_DIR / "db.sqlite3"
 
-if IS_VERCEL_RUNTIME and not DATABASE_URL:
+if IS_VERCEL_RUNTIME and not DATABASE_URL and not DATABASE_ENV_WAS_PROVIDED:
     VERCEL_CONFIGURATION_ERRORS.append(
         "DATABASE_URL must be set to a hosted PostgreSQL connection string. SQLite is not supported on Vercel."
     )
