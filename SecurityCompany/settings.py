@@ -19,6 +19,7 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 IS_VERCEL = bool(os.environ.get("VERCEL"))
+IS_VERCEL_RUNTIME = IS_VERCEL and bool(os.environ.get("VERCEL_REGION"))
 
 
 def env_bool(name, default=False):
@@ -36,11 +37,12 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-local-developm
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool("DJANGO_DEBUG", not IS_VERCEL)
+REQUIRE_PRODUCTION_CONFIG = not DEBUG and (not IS_VERCEL or IS_VERCEL_RUNTIME)
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 if os.environ.get("VERCEL") and ".vercel.app" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(".vercel.app")
-if not DEBUG:
+if REQUIRE_PRODUCTION_CONFIG:
     if SECRET_KEY == "django-insecure-local-development-only-change-me":
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
     if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
@@ -123,9 +125,9 @@ DATABASES = {
     )
 }
 
-if IS_VERCEL and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+if IS_VERCEL_RUNTIME and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     raise ImproperlyConfigured("DATABASE_URL must be set on Vercel. Use a hosted PostgreSQL database; SQLite is not supported for this deployment.")
-if not DEBUG and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+if REQUIRE_PRODUCTION_CONFIG and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     raise ImproperlyConfigured("DATABASE_URL must be set in production.")
 
 
@@ -201,6 +203,8 @@ EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 LOGIN_URL = '/staff/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
+
+
 
 
 
