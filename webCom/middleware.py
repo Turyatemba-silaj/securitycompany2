@@ -1,11 +1,16 @@
+from pathlib import Path
+
 from django.conf import settings
+from django.core.management import call_command
 from django.db import OperationalError, ProgrammingError
 from django.http import HttpResponse
 
 from .models import AuditLog
 
 class VercelConfigurationMiddleware:
-    """Shows clear setup errors instead of a generic Vercel function crash."""
+    """Handles Vercel-specific startup configuration before views touch the DB."""
+
+    _sqlite_fallback_ready = False
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -15,7 +20,26 @@ class VercelConfigurationMiddleware:
         if errors:
             body = "Deployment configuration required:\n\n" + "\n".join(f"- {error}" for error in errors)
             return HttpResponse(body, status=503, content_type="text/plain; charset=utf-8")
+        fallback_error = self.prepare_vercel_sqlite_fallback()
+        if fallback_error:
+            return HttpResponse(fallback_error, status=503, content_type="text/plain; charset=utf-8")
         return self.get_response(request)
+
+    @classmethod
+    def prepare_vercel_sqlite_fallback(cls):
+        if not getattr(settings, "VERCEL_SQLITE_FALLBACK", False) or cls._sqlite_fallback_ready:
+            return ""
+        marker = Path(settings.SQLITE_DATABASE_PATH).with_name(".securitycompany_sqlite_ready")
+        if marker.exists():
+            cls._sqlite_fallback_ready = True
+            return ""
+        try:
+            call_command("migrate", interactive=False, verbosity=0)
+            marker.write_text("ready", encoding="utf-8")
+            cls._sqlite_fallback_ready = True
+        except Exception as exc:
+            return f"Temporary Vercel SQLite setup failed: {exc}"
+        return ""
 
 
 class RequestAuditMiddleware:
