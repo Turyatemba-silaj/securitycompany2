@@ -263,6 +263,19 @@ Production startup requires at minimum:
 set DJANGO_DEBUG=false
 set DJANGO_SECRET_KEY=<strong unique secret>
 set DJANGO_ALLOWED_HOSTS=<your production hostnames>
+set DATABASE_URL=<hosted postgres connection string>
 python manage.py migrate
 python manage.py check --deploy
 ```
+
+For Vercel, add these in Project Settings > Environment Variables before redeploying:
+
+```text
+DJANGO_DEBUG=false
+DJANGO_SECRET_KEY=<strong unique secret>
+DJANGO_ALLOWED_HOSTS=turyans-security.vercel.app,securitycompany2-mvt4.vercel.app
+DATABASE_URL=<hosted postgres connection string>
+DATABASE_SSL_REQUIRE=true
+```
+
+Vercel deployments must use a hosted database such as Vercel Postgres, Neon, Supabase, or another PostgreSQL provider. SQLite is only for local development.

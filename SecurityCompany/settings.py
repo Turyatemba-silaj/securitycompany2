@@ -18,6 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+IS_VERCEL = bool(os.environ.get("VERCEL"))
 
 
 def env_bool(name, default=False):
@@ -34,7 +35,7 @@ def env_bool(name, default=False):
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-local-development-only-change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env_bool("DJANGO_DEBUG", True)
+DEBUG = env_bool("DJANGO_DEBUG", not IS_VERCEL)
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 if os.environ.get("VERCEL") and ".vercel.app" not in ALLOWED_HOSTS:
@@ -119,6 +120,8 @@ if DATABASE_URL:
             ssl_require=env_bool("DATABASE_SSL_REQUIRE", not DEBUG),
         )
     }
+elif IS_VERCEL:
+    raise ImproperlyConfigured("DATABASE_URL must be set on Vercel. Use a hosted PostgreSQL database; SQLite is not supported for this deployment.")
 elif not DEBUG:
     raise ImproperlyConfigured("DATABASE_URL must be set in production.")
 else:
@@ -202,3 +205,4 @@ EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 LOGIN_URL = '/staff/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
+
