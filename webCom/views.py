@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db import models, transaction
+from django.db import DatabaseError, models, transaction
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
@@ -583,11 +583,18 @@ def password_management_action(request, user_id):
 
 def public_site_context():
     today = timezone.localdate()
-    adverts = [advert for advert in WebsiteAdvertisement.objects.all() if advert.is_current]
-    events = CompanyEvent.objects.filter(is_public=True).order_by("-event_date")[:6]
-    resources = WebsiteResource.objects.filter(is_public=True).order_by("resource_type", "title")[:8]
-    links = AssociatedLink.objects.filter(is_public=True).order_by("category", "title")[:8]
-    jobs = JobPosting.objects.filter(is_active=True, is_online=True).order_by("deadline", "-posted_at")[:5]
+    try:
+        adverts = [advert for advert in WebsiteAdvertisement.objects.all() if advert.is_current]
+        events = CompanyEvent.objects.filter(is_public=True).order_by("-event_date")[:6]
+        resources = WebsiteResource.objects.filter(is_public=True).order_by("resource_type", "title")[:8]
+        links = AssociatedLink.objects.filter(is_public=True).order_by("category", "title")[:8]
+        jobs = JobPosting.objects.filter(is_active=True, is_online=True).order_by("deadline", "-posted_at")[:5]
+    except DatabaseError:
+        adverts = []
+        events = []
+        resources = []
+        links = []
+        jobs = []
     return {
         "adverts": adverts,
         "events": events,
@@ -606,12 +613,15 @@ def public_render(request, template, context=None):
 
 
 def public_home(request):
-    stats = {
-        "clients": Client.objects.count(),
-        "sites": Site.objects.count(),
-        "guards": Employee.objects.filter(role__in=("guard", "supervisor"), status="active").count(),
-        "regions": Region.objects.count(),
-    }
+    try:
+        stats = {
+            "clients": Client.objects.count(),
+            "sites": Site.objects.count(),
+            "guards": Employee.objects.filter(role__in=("guard", "supervisor"), status="active").count(),
+            "regions": Region.objects.count(),
+        }
+    except DatabaseError:
+        stats = {"clients": 0, "sites": 0, "guards": 0, "regions": 0}
     context = {
         "title": "Home",
         "active_public": "home",
