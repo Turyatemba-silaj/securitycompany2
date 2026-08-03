@@ -132,6 +132,18 @@ DATABASE_URL_PLACEHOLDERS = {
 VALID_DATABASE_SCHEMES = {"postgres", "postgresql", "pgsql", "postgis", "timescale", "timescalegis", "sqlite"}
 
 
+def normalize_database_url(database_url):
+    database_url = database_url.strip().strip("\"'")
+    for prefix in ("DATABASE_URL=", "POSTGRES_URL=", "POSTGRES_URL_NON_POOLING="):
+        if database_url.upper().startswith(prefix):
+            return database_url[len(prefix):].strip().strip("\"'")
+    for scheme in ("postgresql://", "postgres://", "pgsql://", "postgis://", "timescale://", "timescalegis://", "sqlite://"):
+        scheme_index = database_url.lower().find(scheme)
+        if scheme_index >= 0:
+            return database_url[scheme_index:].split()[0].strip().strip("\"'")
+    return database_url
+
+
 def invalid_database_url_reason(name, database_url):
     lowered_url = database_url.lower()
     is_placeholder = (
@@ -153,7 +165,7 @@ def invalid_database_url_reason(name, database_url):
 def configured_database_url():
     invalid_reasons = []
     for name in ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING"):
-        database_url = (os.environ.get(name) or "").strip()
+        database_url = normalize_database_url(os.environ.get(name) or "")
         if not database_url:
             continue
         invalid_reason = invalid_database_url_reason(name, database_url)
