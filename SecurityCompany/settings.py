@@ -124,7 +124,9 @@ WSGI_APPLICATION = 'SecurityCompany.wsgi.application'
 
 DATABASE_URL_PLACEHOLDERS = {
     "<your postgresql connection string>",
+    "<hosted postgres connection string>",
     "paste-real-postgres-url-here",
+    "postgresql://user:password@host/database?sslmode=require",
     "postgresql://username:password@hostname/database_name?sslmode=require",
 }
 VALID_DATABASE_SCHEMES = {"postgres", "postgresql", "pgsql", "postgis", "timescale", "timescalegis", "sqlite"}
@@ -136,7 +138,9 @@ def invalid_database_url_reason(name, database_url):
         lowered_url in DATABASE_URL_PLACEHOLDERS
         or "paste-real" in lowered_url
         or "username:password@hostname" in lowered_url
+        or "user:password@host" in lowered_url
         or "<your" in lowered_url
+        or "<hosted" in lowered_url
     )
     scheme = urlparse(database_url).scheme
     if is_placeholder:
@@ -178,18 +182,34 @@ else:
     os.environ.pop("DATABASE_URL", None)
 
 SQLITE_DATABASE_PATH = BASE_DIR / "db.sqlite3"
+DATABASE_CONN_MAX_AGE = int(os.environ.get("DATABASE_CONN_MAX_AGE", "600"))
+DATABASE_SSL_REQUIRE = env_bool("DATABASE_SSL_REQUIRE", True)
 
 if IS_VERCEL_RUNTIME and not DATABASE_URL and not DATABASE_ENV_WAS_PROVIDED:
     VERCEL_CONFIGURATION_ERRORS.append(
         "DATABASE_URL must be set to a hosted PostgreSQL connection string. SQLite is not supported on Vercel."
     )
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{SQLITE_DATABASE_PATH}",
-        conn_max_age=600,
+database_config = (
+    dj_database_url.parse(
+        DATABASE_URL,
+        conn_max_age=DATABASE_CONN_MAX_AGE,
         conn_health_checks=True,
     )
+    if DATABASE_URL
+    else dj_database_url.parse(
+        f"sqlite:///{SQLITE_DATABASE_PATH}",
+        conn_max_age=DATABASE_CONN_MAX_AGE,
+        conn_health_checks=True,
+    )
+)
+
+if DATABASE_URL and database_config["ENGINE"] != "django.db.backends.sqlite3" and DATABASE_SSL_REQUIRE:
+    database_config.setdefault("OPTIONS", {})
+    database_config["OPTIONS"].setdefault("sslmode", "require")
+
+DATABASES = {
+    "default": database_config
 }
 
 if REQUIRE_PRODUCTION_CONFIG and not IS_VERCEL_RUNTIME and DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":

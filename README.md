@@ -263,7 +263,7 @@ Production startup requires at minimum:
 set DJANGO_DEBUG=false
 set DJANGO_SECRET_KEY=<strong unique secret>
 set DJANGO_ALLOWED_HOSTS=<your production hostnames>
-set DATABASE_URL=<hosted postgres connection string>
+set DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 python manage.py migrate
 python manage.py check --deploy
 ```
@@ -274,7 +274,7 @@ For Vercel, add these in Project Settings > Environment Variables before redeplo
 DJANGO_DEBUG=false
 DJANGO_SECRET_KEY=<strong unique secret>
 DJANGO_ALLOWED_HOSTS=turyans-security.vercel.app,securitycompany2-mvt4.vercel.app
-DATABASE_URL=<hosted postgres connection string>
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 DATABASE_SSL_REQUIRE=true
 ```
 
